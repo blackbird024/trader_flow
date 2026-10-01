@@ -6,6 +6,7 @@ import {
   computeAccountBreakdown,
   computeEquityCurve,
   computeMonthlyPnl,
+  computePnlByStrategy,
   computePnlBySymbol,
   computeStats,
 } from "./lib/stats";
@@ -28,6 +29,9 @@ const PnlBySymbolChart = lazy(() =>
 );
 const MonthlyPnlChart = lazy(() =>
   import("./components/MonthlyPnlChart").then((m) => ({ default: m.MonthlyPnlChart })),
+);
+const PnlByStrategyChart = lazy(() =>
+  import("./components/PnlByStrategyChart").then((m) => ({ default: m.PnlByStrategyChart })),
 );
 
 function ChartFallback() {
@@ -67,6 +71,7 @@ export default function App() {
   const stats = useMemo(() => computeStats(filteredTrades), [filteredTrades]);
   const equityCurve = useMemo(() => computeEquityCurve(filteredTrades), [filteredTrades]);
   const pnlBySymbol = useMemo(() => computePnlBySymbol(filteredTrades), [filteredTrades]);
+  const pnlByStrategy = useMemo(() => computePnlByStrategy(filteredTrades), [filteredTrades]);
   const monthlyPnl = useMemo(() => computeMonthlyPnl(filteredTrades), [filteredTrades]);
   const accountBreakdown = useMemo(
     () => computeAccountBreakdown(filterTradesByRange(trades, range), accounts),
@@ -76,6 +81,11 @@ export default function App() {
     const counts: Record<string, number> = {};
     for (const trade of trades) counts[trade.accountId] = (counts[trade.accountId] ?? 0) + 1;
     return counts;
+  }, [trades]);
+  const knownStrategies = useMemo(() => {
+    const set = new Set<string>();
+    for (const trade of trades) if (trade.strategy) set.add(trade.strategy);
+    return [...set].sort();
   }, [trades]);
 
   const defaultAccountId = effectiveAccount !== "all" ? effectiveAccount : (accounts[0]?.id ?? "");
@@ -257,13 +267,22 @@ export default function App() {
         </div>
       </section>
 
-      <section className="mt-4">
-        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-4">
+      <section className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-5">
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-4 lg:col-span-3">
           <h2 className="text-sm font-semibold">P&amp;L mensual</h2>
           <p className="text-xs text-[var(--text-muted)]">Resultado acumulado por mes de cierre</p>
           <div className="mt-2">
             <Suspense fallback={<ChartFallback />}>
               <MonthlyPnlChart data={monthlyPnl} theme={theme} />
+            </Suspense>
+          </div>
+        </div>
+        <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-4 lg:col-span-2">
+          <h2 className="text-sm font-semibold">P&amp;L por estrategia</h2>
+          <p className="text-xs text-[var(--text-muted)]">Qué setups te están funcionando</p>
+          <div className="mt-2">
+            <Suspense fallback={<ChartFallback />}>
+              <PnlByStrategyChart data={pnlByStrategy} theme={theme} />
             </Suspense>
           </div>
         </div>
@@ -348,6 +367,7 @@ export default function App() {
           initial={editing}
           accounts={accounts}
           defaultAccountId={editing?.accountId ?? defaultAccountId}
+          knownStrategies={knownStrategies}
           onClose={() => {
             setShowForm(false);
             setEditing(null);

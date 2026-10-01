@@ -5,6 +5,7 @@ interface TradeFormModalProps {
   initial?: Trade | null;
   accounts: Account[];
   defaultAccountId: string;
+  knownStrategies: string[];
   onClose: () => void;
   onSave: (trade: NewTrade, id?: string) => void;
   onRequestNewAccount: () => void;
@@ -21,6 +22,7 @@ function buildEmptyForm(defaultAccountId: string) {
     entryDate: "",
     exitDate: "",
     fees: "0",
+    strategy: "",
     notes: "",
   };
 }
@@ -29,6 +31,7 @@ export function TradeFormModal({
   initial,
   accounts,
   defaultAccountId,
+  knownStrategies,
   onClose,
   onSave,
   onRequestNewAccount,
@@ -45,6 +48,7 @@ export function TradeFormModal({
           entryDate: initial.entryDate,
           exitDate: initial.exitDate,
           fees: String(initial.fees),
+          strategy: initial.strategy ?? "",
           notes: initial.notes ?? "",
         }
       : buildEmptyForm(defaultAccountId),
@@ -90,6 +94,7 @@ export function TradeFormModal({
         entryDate: form.entryDate,
         exitDate: form.exitDate,
         fees,
+        strategy: form.strategy.trim() || undefined,
         notes: form.notes.trim() || undefined,
       },
       initial?.id,
@@ -209,6 +214,21 @@ export function TradeFormModal({
               value={form.exitDate}
               onChange={(e) => setForm({ ...form, exitDate: e.target.value })}
             />
+          </label>
+          <label className="col-span-2 text-xs text-[var(--text-secondary)]">
+            Estrategia (opcional)
+            <input
+              className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--surface-2)] px-2 py-1.5 text-sm"
+              value={form.strategy}
+              onChange={(e) => setForm({ ...form, strategy: e.target.value })}
+              placeholder="Breakout, Pullback, Scalping…"
+              list="strategy-suggestions"
+            />
+            <datalist id="strategy-suggestions">
+              {knownStrategies.map((s) => (
+                <option key={s} value={s} />
+              ))}
+            </datalist>
           </label>
           <label className="col-span-2 text-xs text-[var(--text-secondary)]">
             Notas (opcional)

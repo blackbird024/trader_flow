@@ -10,6 +10,7 @@ const COLUMNS = [
   "entryDate",
   "exitDate",
   "fees",
+  "strategy",
   "notes",
 ] as const;
 
@@ -132,6 +133,7 @@ export function csvToTrades(csv: string, accounts: Account[], fallbackAccountId:
       entryDate: row.entryDate.trim(),
       exitDate: row.exitDate.trim(),
       fees: Number.isNaN(fees) ? 0 : fees,
+      strategy: row.strategy?.trim() || undefined,
       notes: row.notes?.trim() || undefined,
     });
   }

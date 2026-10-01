@@ -16,6 +16,7 @@ export interface Trade {
   entryDate: string; // ISO date, yyyy-mm-dd
   exitDate: string; // ISO date, yyyy-mm-dd
   fees: number;
+  strategy?: string; // e.g. "Breakout", "Pullback"
   notes?: string;
 }
 

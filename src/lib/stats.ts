@@ -203,6 +203,30 @@ export function computePnlBySymbol(trades: Trade[]): SymbolPnl[] {
   return [...map.values()].sort((a, b) => b.pnl - a.pnl);
 }
 
+export interface StrategyPnl {
+  strategy: string;
+  pnl: number;
+  trades: number;
+}
+
+const NO_STRATEGY_LABEL = "Sin estrategia";
+
+export function computePnlByStrategy(trades: Trade[]): StrategyPnl[] {
+  const map = new Map<string, StrategyPnl>();
+  for (const trade of trades) {
+    const key = trade.strategy?.trim() || NO_STRATEGY_LABEL;
+    const pnl = tradePnl(trade);
+    const existing = map.get(key);
+    if (existing) {
+      existing.pnl += pnl;
+      existing.trades += 1;
+    } else {
+      map.set(key, { strategy: key, pnl, trades: 1 });
+    }
+  }
+  return [...map.values()].sort((a, b) => b.pnl - a.pnl);
+}
+
 export interface AccountBreakdown {
   account: Account;
   stats: TradeStats;

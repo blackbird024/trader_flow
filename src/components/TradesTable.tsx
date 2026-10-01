@@ -9,7 +9,7 @@ interface TradesTableProps {
   onDelete: (id: string) => void;
 }
 
-type SortKey = "symbol" | "side" | "quantity" | "entryPrice" | "exitPrice" | "exitDate" | "pnl";
+type SortKey = "symbol" | "side" | "quantity" | "entryPrice" | "exitPrice" | "exitDate" | "strategy" | "pnl";
 type SortDirection = "asc" | "desc";
 
 const COLUMNS: Array<{ key: SortKey; label: string; align?: "right" }> = [
@@ -19,11 +19,13 @@ const COLUMNS: Array<{ key: SortKey; label: string; align?: "right" }> = [
   { key: "entryPrice", label: "Entrada" },
   { key: "exitPrice", label: "Salida" },
   { key: "exitDate", label: "Fecha salida" },
+  { key: "strategy", label: "Estrategia" },
   { key: "pnl", label: "P&L", align: "right" },
 ];
 
 function sortValue(trade: Trade, key: SortKey): string | number {
   if (key === "pnl") return tradePnl(trade);
+  if (key === "strategy") return trade.strategy ?? "";
   return trade[key];
 }
 
@@ -61,7 +63,7 @@ export function TradesTable({ trades, onEdit, onDelete }: TradesTableProps) {
 
   return (
     <div className="overflow-x-auto rounded-lg border border-[var(--border)] bg-[var(--surface-1)]">
-      <table className="w-full min-w-[720px] text-left text-sm">
+      <table className="w-full min-w-[840px] text-left text-sm">
         <thead>
           <tr className="border-b border-[var(--border)] text-xs uppercase tracking-wide text-[var(--text-muted)]">
             {COLUMNS.map((col) => (
@@ -104,6 +106,7 @@ export function TradesTable({ trades, onEdit, onDelete }: TradesTableProps) {
                 <td className="px-4 py-3 tabular-nums">{trade.entryPrice}</td>
                 <td className="px-4 py-3 tabular-nums">{trade.exitPrice}</td>
                 <td className="px-4 py-3 text-[var(--text-secondary)]">{trade.exitDate}</td>
+                <td className="px-4 py-3 text-[var(--text-secondary)]">{trade.strategy || "—"}</td>
                 <td
                   className={`px-4 py-3 text-right tabular-nums font-medium ${
                     isWin ? "text-[var(--status-good)]" : "text-[var(--status-critical)]"
