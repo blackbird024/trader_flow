@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { NewTrade, Trade, TradeSide } from "../types";
 
 interface TradeFormModalProps {
@@ -36,6 +36,16 @@ export function TradeFormModal({ initial, onClose, onSave }: TradeFormModalProps
       : emptyForm,
   );
   const [error, setError] = useState<string | null>(null);
+  const firstFieldRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    firstFieldRef.current?.focus();
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", handleKeyDown);
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -48,7 +58,11 @@ export function TradeFormModal({ initial, onClose, onSave }: TradeFormModalProps
     if ([quantity, entryPrice, exitPrice, fees].some((n) => Number.isNaN(n))) {
       return setError("Cantidad, precios y comisión deben ser números.");
     }
+    if (quantity <= 0) return setError("La cantidad debe ser mayor que cero.");
+    if (entryPrice <= 0 || exitPrice <= 0) return setError("Los precios deben ser mayores que cero.");
+    if (fees < 0) return setError("La comisión no puede ser negativa.");
     if (!form.entryDate || !form.exitDate) return setError("Completa ambas fechas.");
+    if (form.exitDate < form.entryDate) return setError("La fecha de salida no puede ser anterior a la de entrada.");
 
     onSave(
       {
@@ -67,13 +81,26 @@ export function TradeFormModal({ initial, onClose, onSave }: TradeFormModalProps
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-5 shadow-lg">
-        <h2 className="text-base font-semibold">{initial ? "Editar operación" : "Nueva operación"}</h2>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="trade-form-title"
+        className="w-full max-w-md rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-5 shadow-lg"
+      >
+        <h2 id="trade-form-title" className="text-base font-semibold">
+          {initial ? "Editar operación" : "Nueva operación"}
+        </h2>
         <form onSubmit={handleSubmit} className="mt-4 grid grid-cols-2 gap-3">
           <label className="col-span-1 text-xs text-[var(--text-secondary)]">
             Símbolo
             <input
+              ref={firstFieldRef}
               className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--surface-2)] px-2 py-1.5 text-sm"
               value={form.symbol}
               onChange={(e) => setForm({ ...form, symbol: e.target.value })}
@@ -155,7 +182,11 @@ export function TradeFormModal({ initial, onClose, onSave }: TradeFormModalProps
             />
           </label>
 
-          {error && <p className="col-span-2 text-xs text-[var(--status-critical)]">{error}</p>}
+          {error && (
+            <p className="col-span-2 text-xs text-[var(--status-critical)]" role="alert">
+              {error}
+            </p>
+          )}
 
           <div className="col-span-2 mt-2 flex justify-end gap-2">
             <button

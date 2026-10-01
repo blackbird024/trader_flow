@@ -20,6 +20,9 @@ export interface TradeStats {
   bestTrade: Trade | null;
   worstTrade: Trade | null;
   expectancy: number; // average pnl per trade
+  currentStreak: number; // positive = wins in a row, negative = losses in a row
+  bestWinStreak: number;
+  worstLossStreak: number; // positive number, longest losing streak
 }
 
 export function computeStats(trades: Trade[]): TradeStats {
@@ -38,6 +41,9 @@ export function computeStats(trades: Trade[]): TradeStats {
       bestTrade: null,
       worstTrade: null,
       expectancy: 0,
+      currentStreak: 0,
+      bestWinStreak: 0,
+      worstLossStreak: 0,
     };
   }
 
@@ -71,6 +77,8 @@ export function computeStats(trades: Trade[]): TradeStats {
     }
   }
 
+  const { currentStreak, bestWinStreak, worstLossStreak } = computeStreaks(trades);
+
   return {
     totalTrades: trades.length,
     wins,
@@ -85,7 +93,49 @@ export function computeStats(trades: Trade[]): TradeStats {
     bestTrade,
     worstTrade,
     expectancy: totalPnl / trades.length,
+    currentStreak,
+    bestWinStreak,
+    worstLossStreak,
   };
+}
+
+function computeStreaks(trades: Trade[]): {
+  currentStreak: number;
+  bestWinStreak: number;
+  worstLossStreak: number;
+} {
+  const sorted = [...trades].sort((a, b) => a.exitDate.localeCompare(b.exitDate));
+
+  let bestWinStreak = 0;
+  let worstLossStreak = 0;
+  let runWin = 0;
+  let runLoss = 0;
+
+  for (const trade of sorted) {
+    if (tradePnl(trade) >= 0) {
+      runWin += 1;
+      runLoss = 0;
+    } else {
+      runLoss += 1;
+      runWin = 0;
+    }
+    bestWinStreak = Math.max(bestWinStreak, runWin);
+    worstLossStreak = Math.max(worstLossStreak, runLoss);
+  }
+
+  let currentStreak = 0;
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const isWin = tradePnl(sorted[i]) >= 0;
+    if (currentStreak === 0) {
+      currentStreak = isWin ? 1 : -1;
+    } else if ((currentStreak > 0) === isWin) {
+      currentStreak += isWin ? 1 : -1;
+    } else {
+      break;
+    }
+  }
+
+  return { currentStreak, bestWinStreak, worstLossStreak };
 }
 
 export interface EquityPoint {
@@ -102,6 +152,34 @@ export function computeEquityCurve(trades: Trade[]): EquityPoint[] {
     cumulative += pnl;
     return { date: trade.exitDate, cumulativePnl: cumulative, tradePnl: pnl };
   });
+}
+
+export interface MonthlyPnl {
+  month: string; // yyyy-mm
+  label: string; // short display label
+  pnl: number;
+  trades: number;
+}
+
+export function computeMonthlyPnl(trades: Trade[]): MonthlyPnl[] {
+  const map = new Map<string, MonthlyPnl>();
+  for (const trade of trades) {
+    const month = trade.exitDate.slice(0, 7); // yyyy-mm
+    const pnl = tradePnl(trade);
+    const existing = map.get(month);
+    if (existing) {
+      existing.pnl += pnl;
+      existing.trades += 1;
+    } else {
+      const [year, monthNum] = month.split("-");
+      const label = new Date(Number(year), Number(monthNum) - 1, 1).toLocaleDateString("es-ES", {
+        month: "short",
+        year: "2-digit",
+      });
+      map.set(month, { month, label, pnl, trades: 1 });
+    }
+  }
+  return [...map.values()].sort((a, b) => a.month.localeCompare(b.month));
 }
 
 export interface SymbolPnl {
