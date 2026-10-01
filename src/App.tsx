@@ -20,6 +20,7 @@ import { AccountComparison } from "./components/AccountComparison";
 import { AccountManagerModal } from "./components/AccountManagerModal";
 import { TradesTable } from "./components/TradesTable";
 import { TradeFormModal } from "./components/TradeFormModal";
+import { SupportFooter } from "./components/SupportFooter";
 
 const EquityChart = lazy(() => import("./components/EquityChart").then((m) => ({ default: m.EquityChart })));
 const PnlBySymbolChart = lazy(() =>
@@ -28,6 +29,11 @@ const PnlBySymbolChart = lazy(() =>
 const MonthlyPnlChart = lazy(() =>
   import("./components/MonthlyPnlChart").then((m) => ({ default: m.MonthlyPnlChart })),
 );
+const EconomicCalendar = lazy(() =>
+  import("./components/EconomicCalendar").then((m) => ({ default: m.EconomicCalendar })),
+);
+
+type Tab = "dashboard" | "news";
 
 function ChartFallback() {
   return (
@@ -37,6 +43,7 @@ function ChartFallback() {
 
 export default function App() {
   const { theme, toggle } = useTheme();
+  const [tab, setTab] = useState<Tab>("dashboard");
   const [{ trades, accounts }, setData] = useState<{ trades: Trade[]; accounts: Account[] }>(() => loadData());
   const [range, setRange] = useState<DateRangePreset>("all");
   const [selectedAccount, setSelectedAccount] = useState<string | "all">("all");
@@ -182,13 +189,17 @@ export default function App() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <AccountSelector
-            accounts={accounts}
-            value={effectiveAccount}
-            onChange={setSelectedAccount}
-            onManage={() => setShowAccounts(true)}
-          />
-          <DateRangeFilter value={range} onChange={setRange} />
+          {tab === "dashboard" && (
+            <>
+              <AccountSelector
+                accounts={accounts}
+                value={effectiveAccount}
+                onChange={setSelectedAccount}
+                onManage={() => setShowAccounts(true)}
+              />
+              <DateRangeFilter value={range} onChange={setRange} />
+            </>
+          )}
           <button
             onClick={toggle}
             className="rounded border border-[var(--border)] px-2.5 py-1.5 text-xs text-[var(--text-secondary)] hover:bg-[var(--surface-1)]"
@@ -199,6 +210,39 @@ export default function App() {
         </div>
       </header>
 
+      <nav className="mt-4 inline-flex rounded border border-[var(--border)] p-0.5" role="tablist">
+        {(
+          [
+            { id: "dashboard" as const, label: "Dashboard" },
+            { id: "news" as const, label: "Noticias" },
+          ]
+        ).map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            onClick={() => setTab(t.id)}
+            className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
+              tab === t.id
+                ? "bg-[var(--series-1)] text-white"
+                : "text-[var(--text-secondary)] hover:bg-[var(--surface-1)]"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </nav>
+
+      {tab === "news" && (
+        <section className="mt-6">
+          <Suspense fallback={<ChartFallback />}>
+            <EconomicCalendar theme={theme} />
+          </Suspense>
+        </section>
+      )}
+
+      {tab === "dashboard" && (
+        <>
       <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 2xl:grid-cols-8">
         <StatCard
           label="P&L total"
@@ -341,6 +385,8 @@ export default function App() {
           />
         </div>
       </section>
+        </>
+      )}
 
       {showForm && (
         <TradeFormModal
@@ -369,6 +415,8 @@ export default function App() {
           onDelete={handleDeleteAccount}
         />
       )}
+
+      <SupportFooter />
     </div>
   );
 }
