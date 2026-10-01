@@ -1,14 +1,23 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import type { NewTrade, Trade } from "./types";
-import { loadTrades, saveTrades } from "./lib/storage";
-import { buildSampleTrades } from "./lib/sampleData";
-import { computeEquityCurve, computeMonthlyPnl, computePnlBySymbol, computeStats } from "./lib/stats";
+import type { Account, NewTrade, Trade } from "./types";
+import { loadData, saveAccounts, saveTrades } from "./lib/storage";
+import { buildSampleData } from "./lib/sampleData";
+import {
+  computeAccountBreakdown,
+  computeEquityCurve,
+  computeMonthlyPnl,
+  computePnlBySymbol,
+  computeStats,
+} from "./lib/stats";
 import { csvToTrades, tradesToCsv } from "./lib/csv";
 import { formatCurrency, formatNumber, formatPercent } from "./lib/format";
 import { filterTradesByRange, type DateRangePreset } from "./lib/dateRange";
 import { useTheme } from "./hooks/useTheme";
 import { StatCard } from "./components/StatCard";
 import { DateRangeFilter } from "./components/DateRangeFilter";
+import { AccountSelector } from "./components/AccountSelector";
+import { AccountComparison } from "./components/AccountComparison";
+import { AccountManagerModal } from "./components/AccountManagerModal";
 import { TradesTable } from "./components/TradesTable";
 import { TradeFormModal } from "./components/TradeFormModal";
 
@@ -28,9 +37,11 @@ function ChartFallback() {
 
 export default function App() {
   const { theme, toggle } = useTheme();
-  const [trades, setTrades] = useState<Trade[]>(() => loadTrades());
+  const [{ trades, accounts }, setData] = useState<{ trades: Trade[]; accounts: Account[] }>(() => loadData());
   const [range, setRange] = useState<DateRangePreset>("all");
+  const [selectedAccount, setSelectedAccount] = useState<string | "all">("all");
   const [showForm, setShowForm] = useState(false);
+  const [showAccounts, setShowAccounts] = useState(false);
   const [editing, setEditing] = useState<Trade | null>(null);
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -39,17 +50,40 @@ export default function App() {
     saveTrades(trades);
   }, [trades]);
 
-  const filteredTrades = useMemo(() => filterTradesByRange(trades, range), [trades, range]);
+  useEffect(() => {
+    saveAccounts(accounts);
+  }, [accounts]);
+
+  // falls back to "all" on render if the selected account was deleted, instead of a post-render effect
+  const effectiveAccount =
+    selectedAccount !== "all" && !accounts.some((a) => a.id === selectedAccount) ? "all" : selectedAccount;
+
+  const accountScopedTrades = useMemo(
+    () => (effectiveAccount === "all" ? trades : trades.filter((t) => t.accountId === effectiveAccount)),
+    [trades, effectiveAccount],
+  );
+  const filteredTrades = useMemo(() => filterTradesByRange(accountScopedTrades, range), [accountScopedTrades, range]);
   const stats = useMemo(() => computeStats(filteredTrades), [filteredTrades]);
   const equityCurve = useMemo(() => computeEquityCurve(filteredTrades), [filteredTrades]);
   const pnlBySymbol = useMemo(() => computePnlBySymbol(filteredTrades), [filteredTrades]);
   const monthlyPnl = useMemo(() => computeMonthlyPnl(filteredTrades), [filteredTrades]);
+  const accountBreakdown = useMemo(
+    () => computeAccountBreakdown(filterTradesByRange(trades, range), accounts),
+    [trades, accounts, range],
+  );
+  const tradeCountByAccount = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const trade of trades) counts[trade.accountId] = (counts[trade.accountId] ?? 0) + 1;
+    return counts;
+  }, [trades]);
+
+  const defaultAccountId = effectiveAccount !== "all" ? effectiveAccount : (accounts[0]?.id ?? "");
 
   function handleSave(trade: NewTrade, id?: string) {
     if (id) {
-      setTrades((prev) => prev.map((t) => (t.id === id ? { ...trade, id } : t)));
+      setData((prev) => ({ ...prev, trades: prev.trades.map((t) => (t.id === id ? { ...trade, id } : t)) }));
     } else {
-      setTrades((prev) => [...prev, { ...trade, id: crypto.randomUUID() }]);
+      setData((prev) => ({ ...prev, trades: [...prev.trades, { ...trade, id: crypto.randomUUID() }] }));
     }
     setShowForm(false);
     setEditing(null);
@@ -57,22 +91,37 @@ export default function App() {
 
   function handleDelete(id: string) {
     if (confirm("¿Borrar esta operación?")) {
-      setTrades((prev) => prev.filter((t) => t.id !== id));
+      setData((prev) => ({ ...prev, trades: prev.trades.filter((t) => t.id !== id) }));
     }
   }
 
   function handleLoadSample() {
-    setTrades(buildSampleTrades());
+    setData(buildSampleData());
   }
 
   function handleClearAll() {
-    if (confirm("Esto borrará todas tus operaciones guardadas. ¿Continuar?")) {
-      setTrades([]);
+    if (confirm("Esto borrará todas tus operaciones y cuentas guardadas. ¿Continuar?")) {
+      setData({ trades: [], accounts: [] });
     }
   }
 
+  function handleAddAccount(name: string) {
+    setData((prev) => ({ ...prev, accounts: [...prev.accounts, { id: crypto.randomUUID(), name }] }));
+  }
+
+  function handleRenameAccount(id: string, name: string) {
+    setData((prev) => ({ ...prev, accounts: prev.accounts.map((a) => (a.id === id ? { ...a, name } : a)) }));
+  }
+
+  function handleDeleteAccount(id: string) {
+    setData((prev) => ({
+      accounts: prev.accounts.filter((a) => a.id !== id),
+      trades: prev.trades.filter((t) => t.accountId !== id),
+    }));
+  }
+
   function handleExport() {
-    const csv = tradesToCsv(filteredTrades);
+    const csv = tradesToCsv(filteredTrades, accounts);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -91,17 +140,25 @@ export default function App() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      const result = csvToTrades(String(reader.result ?? ""));
-      if (result.trades.length > 0) {
-        setTrades((prev) => [...prev, ...result.trades]);
-      }
-      if (result.errors.length > 0) {
-        setImportMessage(
-          `Importadas ${result.trades.length} operaciones. ${result.errors.length} filas con errores.`,
-        );
-      } else {
-        setImportMessage(`Importadas ${result.trades.length} operaciones.`);
-      }
+      setData((prev) => {
+        const hadNoAccounts = prev.accounts.length === 0;
+        const fallbackId = prev.accounts[0]?.id ?? crypto.randomUUID();
+        const result = csvToTrades(String(reader.result ?? ""), prev.accounts, fallbackId);
+        const accounts =
+          hadNoAccounts && result.trades.length > 0 && result.newAccounts.length === 0
+            ? [...prev.accounts, { id: fallbackId, name: "Importada" }]
+            : [...prev.accounts, ...result.newAccounts];
+
+        if (result.errors.length > 0) {
+          setImportMessage(
+            `Importadas ${result.trades.length} operaciones. ${result.errors.length} filas con errores.`,
+          );
+        } else {
+          setImportMessage(`Importadas ${result.trades.length} operaciones.`);
+        }
+
+        return { accounts, trades: [...prev.trades, ...result.trades] };
+      });
     };
     reader.readAsText(file);
     e.target.value = "";
@@ -124,7 +181,13 @@ export default function App() {
             Registra tus operaciones y analiza el rendimiento de tu operativa.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <AccountSelector
+            accounts={accounts}
+            value={effectiveAccount}
+            onChange={setSelectedAccount}
+            onManage={() => setShowAccounts(true)}
+          />
           <DateRangeFilter value={range} onChange={setRange} />
           <button
             onClick={toggle}
@@ -161,6 +224,16 @@ export default function App() {
           sublabel={`Peor: ${stats.worstLossStreak} seguidas`}
         />
       </section>
+
+      {effectiveAccount === "all" && accounts.length > 1 && (
+        <section className="mt-6">
+          <h2 className="text-sm font-semibold">Comparativa por cuenta</h2>
+          <p className="text-xs text-[var(--text-muted)]">Click en una cuenta para filtrar el dashboard por ella</p>
+          <div className="mt-2">
+            <AccountComparison breakdown={accountBreakdown} onSelect={setSelectedAccount} />
+          </div>
+        </section>
+      )}
 
       <section className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-5">
         <div className="rounded-lg border border-[var(--border)] bg-[var(--surface-1)] p-4 lg:col-span-3">
@@ -202,7 +275,11 @@ export default function App() {
             <button
               onClick={() => {
                 setEditing(null);
-                setShowForm(true);
+                if (accounts.length === 0) {
+                  setShowAccounts(true);
+                } else {
+                  setShowForm(true);
+                }
               }}
               className="rounded bg-[var(--series-1)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90"
             >
@@ -247,9 +324,9 @@ export default function App() {
           </p>
         )}
 
-        {range !== "all" && trades.length > filteredTrades.length && (
+        {(range !== "all" || effectiveAccount !== "all") && trades.length > filteredTrades.length && (
           <p className="mt-2 text-xs text-[var(--text-muted)]">
-            Mostrando {filteredTrades.length} de {trades.length} operaciones en este rango.
+            Mostrando {filteredTrades.length} de {trades.length} operaciones con los filtros actuales.
           </p>
         )}
 
@@ -268,11 +345,28 @@ export default function App() {
       {showForm && (
         <TradeFormModal
           initial={editing}
+          accounts={accounts}
+          defaultAccountId={editing?.accountId ?? defaultAccountId}
           onClose={() => {
             setShowForm(false);
             setEditing(null);
           }}
           onSave={handleSave}
+          onRequestNewAccount={() => {
+            setShowForm(false);
+            setShowAccounts(true);
+          }}
+        />
+      )}
+
+      {showAccounts && (
+        <AccountManagerModal
+          accounts={accounts}
+          tradeCountByAccount={tradeCountByAccount}
+          onClose={() => setShowAccounts(false)}
+          onAdd={handleAddAccount}
+          onRename={handleRenameAccount}
+          onDelete={handleDeleteAccount}
         />
       )}
     </div>

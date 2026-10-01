@@ -1,7 +1,13 @@
 export type TradeSide = "long" | "short";
 
+export interface Account {
+  id: string;
+  name: string; // e.g. "Apex 50K #1"
+}
+
 export interface Trade {
   id: string;
+  accountId: string;
   symbol: string;
   side: TradeSide;
   quantity: number;

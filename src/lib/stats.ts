@@ -1,4 +1,4 @@
-import type { Trade } from "../types";
+import type { Account, Trade } from "../types";
 
 export function tradePnl(trade: Trade): number {
   const direction = trade.side === "long" ? 1 : -1;
@@ -201,4 +201,18 @@ export function computePnlBySymbol(trades: Trade[]): SymbolPnl[] {
     }
   }
   return [...map.values()].sort((a, b) => b.pnl - a.pnl);
+}
+
+export interface AccountBreakdown {
+  account: Account;
+  stats: TradeStats;
+}
+
+export function computeAccountBreakdown(trades: Trade[], accounts: Account[]): AccountBreakdown[] {
+  return accounts
+    .map((account) => ({
+      account,
+      stats: computeStats(trades.filter((t) => t.accountId === account.id)),
+    }))
+    .sort((a, b) => b.stats.totalPnl - a.stats.totalPnl);
 }

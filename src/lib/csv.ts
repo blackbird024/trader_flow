@@ -1,6 +1,7 @@
-import type { Trade, TradeSide } from "../types";
+import type { Account, Trade, TradeSide } from "../types";
 
 const COLUMNS = [
+  "account",
   "symbol",
   "side",
   "quantity",
@@ -12,9 +13,12 @@ const COLUMNS = [
   "notes",
 ] as const;
 
-export function tradesToCsv(trades: Trade[]): string {
+export function tradesToCsv(trades: Trade[], accounts: Account[]): string {
+  const accountName = new Map(accounts.map((a) => [a.id, a.name]));
   const rows = trades.map((trade) =>
-    COLUMNS.map((col) => escapeCsvValue(String(trade[col] ?? ""))).join(","),
+    COLUMNS.map((col) =>
+      escapeCsvValue(col === "account" ? (accountName.get(trade.accountId) ?? "") : String(trade[col] ?? "")),
+    ).join(","),
   );
   return [COLUMNS.join(","), ...rows].join("\n");
 }
@@ -56,18 +60,27 @@ function parseCsvLine(line: string): string[] {
 
 export interface CsvParseResult {
   trades: Trade[];
+  newAccounts: Account[];
   errors: string[];
 }
 
-export function csvToTrades(csv: string): CsvParseResult {
+/**
+ * Parses a CSV export back into trades. The `account` column is matched
+ * against existing accounts by name (case-insensitive); unknown names
+ * become new accounts, returned in `newAccounts` so the caller can persist
+ * them alongside the trades. Rows with no account default to `fallbackAccountId`.
+ */
+export function csvToTrades(csv: string, accounts: Account[], fallbackAccountId: string): CsvParseResult {
   const lines = csv.split(/\r?\n/).filter((line) => line.trim().length > 0);
   const errors: string[] = [];
   if (lines.length < 2) {
-    return { trades: [], errors: ["El archivo no tiene filas de datos."] };
+    return { trades: [], newAccounts: [], errors: ["El archivo no tiene filas de datos."] };
   }
 
   const header = parseCsvLine(lines[0]).map((h) => h.trim());
   const trades: Trade[] = [];
+  const newAccounts: Account[] = [];
+  const byName = new Map(accounts.map((a) => [a.name.toLowerCase(), a]));
 
   for (let i = 1; i < lines.length; i++) {
     const values = parseCsvLine(lines[i]);
@@ -94,8 +107,23 @@ export function csvToTrades(csv: string): CsvParseResult {
       continue;
     }
 
+    const accountName = row.account?.trim();
+    let accountId = fallbackAccountId;
+    if (accountName) {
+      const existing = byName.get(accountName.toLowerCase());
+      if (existing) {
+        accountId = existing.id;
+      } else {
+        const created: Account = { id: crypto.randomUUID(), name: accountName };
+        byName.set(accountName.toLowerCase(), created);
+        newAccounts.push(created);
+        accountId = created.id;
+      }
+    }
+
     trades.push({
       id: crypto.randomUUID(),
+      accountId,
       symbol: row.symbol.trim().toUpperCase(),
       side: side as TradeSide,
       quantity,
@@ -108,5 +136,5 @@ export function csvToTrades(csv: string): CsvParseResult {
     });
   }
 
-  return { trades, errors };
+  return { trades, newAccounts, errors };
 }

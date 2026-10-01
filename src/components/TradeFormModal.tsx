@@ -1,28 +1,42 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { NewTrade, Trade, TradeSide } from "../types";
+import type { Account, NewTrade, Trade, TradeSide } from "../types";
 
 interface TradeFormModalProps {
   initial?: Trade | null;
+  accounts: Account[];
+  defaultAccountId: string;
   onClose: () => void;
   onSave: (trade: NewTrade, id?: string) => void;
+  onRequestNewAccount: () => void;
 }
 
-const emptyForm = {
-  symbol: "",
-  side: "long" as TradeSide,
-  quantity: "",
-  entryPrice: "",
-  exitPrice: "",
-  entryDate: "",
-  exitDate: "",
-  fees: "0",
-  notes: "",
-};
+function buildEmptyForm(defaultAccountId: string) {
+  return {
+    accountId: defaultAccountId,
+    symbol: "",
+    side: "long" as TradeSide,
+    quantity: "",
+    entryPrice: "",
+    exitPrice: "",
+    entryDate: "",
+    exitDate: "",
+    fees: "0",
+    notes: "",
+  };
+}
 
-export function TradeFormModal({ initial, onClose, onSave }: TradeFormModalProps) {
+export function TradeFormModal({
+  initial,
+  accounts,
+  defaultAccountId,
+  onClose,
+  onSave,
+  onRequestNewAccount,
+}: TradeFormModalProps) {
   const [form, setForm] = useState(() =>
     initial
       ? {
+          accountId: initial.accountId,
           symbol: initial.symbol,
           side: initial.side,
           quantity: String(initial.quantity),
@@ -33,10 +47,10 @@ export function TradeFormModal({ initial, onClose, onSave }: TradeFormModalProps
           fees: String(initial.fees),
           notes: initial.notes ?? "",
         }
-      : emptyForm,
+      : buildEmptyForm(defaultAccountId),
   );
   const [error, setError] = useState<string | null>(null);
-  const firstFieldRef = useRef<HTMLInputElement>(null);
+  const firstFieldRef = useRef<HTMLSelectElement>(null);
 
   useEffect(() => {
     firstFieldRef.current?.focus();
@@ -54,6 +68,7 @@ export function TradeFormModal({ initial, onClose, onSave }: TradeFormModalProps
     const exitPrice = Number(form.exitPrice);
     const fees = Number(form.fees || 0);
 
+    if (!form.accountId) return setError("Elegí una cuenta.");
     if (!form.symbol.trim()) return setError("El símbolo es obligatorio.");
     if ([quantity, entryPrice, exitPrice, fees].some((n) => Number.isNaN(n))) {
       return setError("Cantidad, precios y comisión deben ser números.");
@@ -66,6 +81,7 @@ export function TradeFormModal({ initial, onClose, onSave }: TradeFormModalProps
 
     onSave(
       {
+        accountId: form.accountId,
         symbol: form.symbol.trim().toUpperCase(),
         side: form.side,
         quantity,
@@ -97,10 +113,32 @@ export function TradeFormModal({ initial, onClose, onSave }: TradeFormModalProps
           {initial ? "Editar operación" : "Nueva operación"}
         </h2>
         <form onSubmit={handleSubmit} className="mt-4 grid grid-cols-2 gap-3">
+          <label className="col-span-2 text-xs text-[var(--text-secondary)]">
+            Cuenta
+            <select
+              ref={firstFieldRef}
+              className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--surface-2)] px-2 py-1.5 text-sm"
+              value={form.accountId}
+              onChange={(e) => {
+                if (e.target.value === "__new__") {
+                  onRequestNewAccount();
+                  return;
+                }
+                setForm({ ...form, accountId: e.target.value });
+              }}
+            >
+              {accounts.length === 0 && <option value="">Sin cuentas todavía</option>}
+              {accounts.map((account) => (
+                <option key={account.id} value={account.id}>
+                  {account.name}
+                </option>
+              ))}
+              <option value="__new__">+ Nueva cuenta…</option>
+            </select>
+          </label>
           <label className="col-span-1 text-xs text-[var(--text-secondary)]">
             Símbolo
             <input
-              ref={firstFieldRef}
               className="mt-1 w-full rounded border border-[var(--border)] bg-[var(--surface-2)] px-2 py-1.5 text-sm"
               value={form.symbol}
               onChange={(e) => setForm({ ...form, symbol: e.target.value })}
