@@ -22,6 +22,7 @@ import { AccountManagerModal } from "./components/AccountManagerModal";
 import { TradesTable } from "./components/TradesTable";
 import { TradeFormModal } from "./components/TradeFormModal";
 import { SupportFooter } from "./components/SupportFooter";
+import { TradingPlan } from "./components/TradingPlan";
 
 const EquityChart = lazy(() => import("./components/EquityChart").then((m) => ({ default: m.EquityChart })));
 const PnlBySymbolChart = lazy(() =>
@@ -209,6 +210,10 @@ export default function App() {
           </button>
         </div>
       </header>
+
+      <section className="mt-4">
+        <TradingPlan />
+      </section>
 
       <section className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4 2xl:grid-cols-8">
         <StatCard

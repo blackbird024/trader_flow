@@ -17,10 +17,4 @@ export interface AffiliateLink {
 // One row per partner. Only add a link once you have an approved
 // affiliate/referral program — most prop firms and brokers require
 // applying first.
-export const AFFILIATE_LINKS: AffiliateLink[] = [
-  {
-    label: "Apex Trader Funding",
-    description: "Cuentas de evaluación y fondeo para futuros",
-    url: "https://TU_LINK_DE_AFILIADO_APEX",
-  },
-];
+export const AFFILIATE_LINKS: AffiliateLink[] = [];

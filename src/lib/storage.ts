@@ -2,6 +2,7 @@ import type { Account, Trade } from "../types";
 
 const TRADES_KEY = "traderflow.trades.v1";
 const ACCOUNTS_KEY = "traderflow.accounts.v1";
+const PLAN_KEY = "traderflow.plan.v1";
 const DEFAULT_ACCOUNT_NAME = "Cuenta principal";
 
 function readJson<T>(key: string): T | null {
@@ -28,6 +29,22 @@ export function saveTrades(trades: Trade[]): void {
 
 export function saveAccounts(accounts: Account[]): void {
   writeJson(ACCOUNTS_KEY, accounts);
+}
+
+export function loadPlan(): string {
+  try {
+    return localStorage.getItem(PLAN_KEY) ?? "";
+  } catch {
+    return "";
+  }
+}
+
+export function savePlan(plan: string): void {
+  try {
+    localStorage.setItem(PLAN_KEY, plan);
+  } catch {
+    // storage unavailable — the edit stays in-memory for this session
+  }
 }
 
 /**
